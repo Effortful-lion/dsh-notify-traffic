@@ -12,6 +12,9 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      # 提到 job 层：step 的 if 条件只能读到这一层的 env
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,15 +52,29 @@ jobs:
             exit 1
           fi
 
-      # The trusted publisher grants "npm stage publish" today: a direct publish
-      # is rejected with "OIDC permission denied for this action". Stage it then,
-      # and leave the stage id in the run summary so approving is one click.
-      - name: Publish with provenance
+      # 首选 OIDC：不需要任何 token。trusted publisher 只授予 staging 时，
+      # 会失败并留下说明，下面再用 token 兜底。
+      - name: Publish via OIDC
+        id: oidc
+        continue-on-error: true
+        run: npm publish --provenance --access public
+
+      # 回退：仓库里配了 NPM_TOKEN 就用它发布（无 provenance）。
+      # 适用于账户只有 security key、npm 网站 sudo 无法完成第二因素的机器。
+      - name: Publish via NPM_TOKEN
+        if: steps.oidc.outcome != 'success' && env.NPM_TOKEN != ''
         run: |
-          if npm publish --provenance --access public; then
-            echo "### 已直接发布带 provenance 的版本" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          chmod 600 "$HOME/.npmrc"
+          npm publish --access public
+
+      - name: Result
+        run: |
+          if [ "${{ steps.oidc.outcome }}" = "success" ]; then
+            echo "### 已通过 OIDC 发布（带 provenance）" >> "$GITHUB_STEP_SUMMARY"
+          elif [ -n "${{ secrets.NPM_TOKEN }}" ]; then
+            echo "### 已通过 NPM_TOKEN 发布（无 provenance）" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### 发布失败：OIDC 未通过，且仓库没有 NPM_TOKEN" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
-          echo "### 直接发布被 OIDC 权限拒绝，改为 staging" >> "$GITHUB_STEP_SUMMARY"
-          npm stage publish --access public 2>&1 | tee /tmp/stage.log
-          grep -iE 'stage|approve' /tmp/stage.log | head -5 >> "$GITHUB_STEP_SUMMARY" || true
