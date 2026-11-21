@@ -266,7 +266,8 @@ export function apply(ctx, config = {}) {
 
     const url = `${overlayOrigin}${PREFIX}/overlay`
     try {
-      const child = spawn(bin, ['--url', url, '--width', '320', '--height', '300'], {
+      // 只传 URL：初始尺寸由二进制决定（332×300），页面随后按内容自适应
+      const child = spawn(bin, ['--url', url], {
         stdio: 'ignore',
         detached: false,
       })
