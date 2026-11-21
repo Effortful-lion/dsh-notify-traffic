@@ -196,13 +196,42 @@ extension AppDelegate: WKScriptMessageHandler {
 
 // 单实例：无论被 spawn 几次，系统里只允许一个悬浮窗。
 // flock 随进程退出自动释放，崩溃也不会留下死锁。
+// 锁文件里记录持有者 pid：插件升级后新二进制要能顶掉旧窗口，
+// 否则用户升级了却还看着旧 UI。
 let lockPath = NSTemporaryDirectory() + "dsh-notify-traffic-overlay.lock"
 let lockFd = open(lockPath, O_CREAT | O_RDWR, 0o600)
+
+func readLockPid() -> pid_t? {
+    guard let raw = try? String(contentsOfFile: lockPath, encoding: .utf8) else { return nil }
+    guard let value = pid_t(raw.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+    return value > 0 ? value : nil
+}
+
+func writeLockPid() {
+    guard lockFd >= 0 else { return }
+    ftruncate(lockFd, 0)
+    lseek(lockFd, 0, SEEK_SET)
+    let text = "\(getpid())"
+    _ = text.withCString { write(lockFd, $0, strlen($0)) }
+}
+
 if lockFd >= 0 {
-    if flock(lockFd, LOCK_EX | LOCK_NB) != 0 {
-        // 已有实例在跑：直接退出，让它继续服务
+    var acquired = flock(lockFd, LOCK_EX | LOCK_NB) == 0
+    if !acquired {
+        // 已有实例：请它让位（旧版本升级到新版本时走这条）
+        if let oldPid = readLockPid(), oldPid != getpid() {
+            kill(oldPid, SIGTERM)
+        }
+        for _ in 0..<40 {
+            usleep(100_000)                       // 最多等 4 秒
+            if flock(lockFd, LOCK_EX | LOCK_NB) == 0 { acquired = true; break }
+        }
+    }
+    if !acquired {
+        // 旧实例不肯走：让它继续服务，本次退出
         exit(0)
     }
+    writeLockPid()
 }
 
 let app = NSApplication.shared
