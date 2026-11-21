@@ -58,6 +58,55 @@ Add it to `dsh.profile.bundles` as well.
 
 DSH sidebar → Plugins → Add plugin, enter `dsh-notify-traffic` (or `link:/absolute/path`).
 
+## Install gotchas
+
+### You may not get the latest version
+
+`pnpm add dsh-notify-traffic` sometimes resolves to an older release:
+
+1. The profile already pins a range like `^1.0.0`, so pnpm reuses the lockfile entry
+2. DSH's supply-chain cooldown (`minimumReleaseAge`) withholds freshly published versions
+
+Ask for the exact version:
+
+```sh
+pnpm add dsh-notify-traffic@1.0.1
+```
+
+To stay off stale releases, pin the profile range exactly:
+
+```json
+"dsh-notify-traffic": "1.0.1"
+```
+
+### The plugin panel refuses to remove it (`bundle-in-use`)
+
+Saving anything on the settings page leaves a config block in the profile's `cordis.patch.yml`:
+
+```yaml
+- id: notify-traffic
+  name: dsh-notify-traffic
+  config: { ... }
+```
+
+While that block exists the plugin manager treats the bundle as in use. Either delete the block first, or bypass the manager with `pnpm remove dsh-notify-traffic`.
+
+## When a restart is needed
+
+| What you changed | How it takes effect |
+| --- | --- |
+| Any toggle on the settings page | **Immediately** — written back to the profile and applied in memory |
+| `config` in `cordis.patch.yml` | **Immediately** — HMR recomposes with the new config |
+| `bin/overlay.html` (window appearance) | The window reloads itself, **no DSH restart** |
+| `client.js` (in-DSH panel and settings page) | Refresh the DSH page; client-hmr pushes the new bundle |
+| `index.js` / `lib/*.js` (host logic) | **Restart DSH** |
+
+The last row is a DSH constraint, not laziness here: Cordis HMR only hot-swaps packages that are **symlinked** inside the profile. An npm install is a real directory, so host module changes are marked as pending until a restart. Installed via `link:`, the plugin is inside the hot-swap set and host changes do hot-reload.
+
+### How the window avoids restarts
+
+The host puts `uiRev` (the `overlay.html` mtime) into `/state`. The window compares it on every poll and calls `location.reload()` when it moves, so style and copy changes land within a second or two of saving.
+
 ## Usage
 
 | Action | Where |

@@ -15,7 +15,7 @@
  * @module dsh-notify-traffic
  */
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MonitorStore } from './lib/store.js'
@@ -178,6 +178,16 @@ export function apply(ctx, config = {}) {
     store.apply({ sessionId, kind: 'error-acked' })
   }
 
+  // ── UI 版本 ─────────────────────────────────────────────
+  /** 悬浮窗页面的版本：HTML 的 mtime。改 HTML 后窗口会自行 reload。 */
+  function overlayRevision() {
+    try {
+      return statSync(join(__dirname, 'bin', 'overlay.html')).mtimeMs
+    } catch {
+      return 0
+    }
+  }
+
   // ── 快照 ────────────────────────────────────────────────
   function buildState(now = Date.now()) {
     const sessions = store.snapshot(now)
@@ -195,6 +205,7 @@ export function apply(ctx, config = {}) {
       cards: [...cards.values()],
       sounds,
       focus: dshFocused,
+      uiRev: overlayRevision(),
       settings: {
         mode: cfg.mode,
         form,
@@ -560,6 +571,11 @@ export function apply(ctx, config = {}) {
         } catch (error) {
           sendJson(res, 500, { ok: false, error: `overlay page missing: ${error?.message ?? error}` })
         }
+        return
+      }
+
+      if (pathname === '/overlay/revision' && method === 'GET') {
+        sendJson(res, 200, { ok: true, rev: overlayRevision() })
         return
       }
 

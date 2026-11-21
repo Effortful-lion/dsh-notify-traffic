@@ -1,6 +1,6 @@
 {
   "name": "dsh-notify-traffic",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": false,
   "description": "DSH 会话状态悬浮窗：系统级置顶四色状态灯、审批/提问窗内直办、声音提醒",
   "type": "module",

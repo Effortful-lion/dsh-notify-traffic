@@ -60,7 +60,14 @@ jobs:
         run: npm publish --provenance --access public
 
       # 回退：仓库里配了 NPM_TOKEN 就用它发布（无 provenance）。
-      # 适用于账户只有 security key、npm 网站 sudo 无法完成第二因素的机器。
+      #
+      # 为什么会走到这条分支：在 npm 网页上配置 trusted publisher 需要 sudo 二次验证，
+      # 而本机 passkey 只存在 iCloud 钥匙串里、只有 Safari 能调起系统 Passkey 面板；
+      # Chrome/Edge/Firefox 拿不到那枚凭据，sudo 走不完，trusted publisher 就配不上。
+      # 结论：配置这些操作请用 Safari 打开 npmjs.com。详见 docs/DETAIL.md「发布」。
+      #
+      # 本条是 continue-on-error 的兜底，所以「发版成功但没有 provenance 徽章」
+      # 等于 OIDC 没走通，不是发布失败。
       - name: Publish via NPM_TOKEN
         if: steps.oidc.outcome != 'success' && env.NPM_TOKEN != ''
         run: |

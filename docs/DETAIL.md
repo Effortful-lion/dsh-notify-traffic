@@ -83,6 +83,39 @@ DSH 宿主（Node 子进程）                      系统级窗口（独立原�
 swiftc -O -o bin/ntf-overlay bin/overlay.swift
 ```
 
+## 发布
+
+发版由 `.github/workflows/publish.yml` 承担，推 `v*` tag 触发。首选 **OIDC trusted publishing**（不需要任何 token，产物带 provenance），失败回退 `NPM_TOKEN`。
+
+### 配置 trusted publisher 必须用 Safari
+
+在 npm 网页上配置 trusted publisher（或任何需要 `sudo` 二次验证的操作）时，**必须用 Safari 打开 npmjs.com**。Chrome / Edge / Firefox 会卡在第二因素验证，无法完成。
+
+原因不是浏览器兼容性，而是**认证器绑定的问题**：
+
+- 这台 Mac 上 passkey / 平台认证器只落在 **iCloud 钥匙串**里，对应的只有 Safari 能调起系统 Passkey 面板
+- Chrome 走自己的 WebAuthn 通道，拿不到 iCloud 那枚凭据，`sudo` 模式的第二因素因此走不完
+- 表现是：页面停在「验证身份」不报错，或者报一个与凭据无关的通用失败，看不出根因
+
+排查顺序：
+
+1. 先确认是不是这个原因 —— 换 Safari 重试同一操作，能过就是它
+2. Safari 里如果也没有凭据，说明这台机器的 iCloud 钥匙串没有同步到该 passkey，需要先在 Safari 里录入
+3. 实在过不去，走 token 兜底：在 npm 生成 granular access token，配到仓库 secrets 的 `NPM_TOKEN`，CI 会用 `npm publish --access public`（无 provenance）
+
+> CI 里 `Publish via OIDC` 那步是 `continue-on-error: true`，OIDC 失败不会中断流程，会自动落到 `NPM_TOKEN` 分支。所以「发版成功了但没有 provenance 徽章」= OIDC 没走通，不是发布失败。
+
+### 发版前本地自检
+
+```bash
+node flow.mjs check      # 语法 + npm pack 内容检查（对齐 CI）
+node flow.mjs status     # 版本 / git 状态 / 最近 tag
+node flow.mjs release patch
+git push --follow-tags
+```
+
+工作流在 `workflows/dsh-plugin-release/`。
+
 ## 边界
 
 - 系统窗口只在 macOS 上构建（Windows 需要另写一个 Win32/WPF 版本，接口相同：轮询 `/state`、POST `/answer`）。

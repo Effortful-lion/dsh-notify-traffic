@@ -176,6 +176,8 @@
   var selected = {};          // requestId -> { qid: [labels] }
   var seenSounds = {};
   var lastFocusTs = 0;
+  var uiRev = null;          // 首次 /state 拿到的版本，不作为「变化」
+  var reloading = false;
   /** 鼠标按下期间不重建 DOM：否则 down/up 落在不同节点上，click 不会触发 */
   var interacting = false;
   var lastFp = '';
@@ -725,6 +727,16 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d) return;
+        // UI 版本变化 → 重载页面拿新 HTML（改 UI 不用重启 DSH / 窗口）
+        var rev = d.settings && d.settings.uiRev;
+        if (rev != null) {
+          if (uiRev === null) uiRev = rev;
+          else if (rev !== uiRev && !reloading) {
+            reloading = true;
+            location.reload();
+            return;
+          }
+        }
         state = d;
         speak(d.sounds);
         // 宿主转来的「打开会话」请求（来自本窗口的点击）

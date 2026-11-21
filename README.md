@@ -44,6 +44,8 @@ pnpm add dsh-notify-traffic
 
 再把 `"dsh-notify-traffic"` 加进 `package.json` 的 `dsh.profile.bundles`，重启 DSH。
 
+装好后右上角出现悬浮窗，**设置**左栏出现「会话悬浮窗」。
+
 ### 方式二：本地链接（开发用）
 
 ```sh
@@ -52,11 +54,67 @@ cd ~/.dsh/profiles/desktop
 pnpm add "link:/绝对路径/dsh-notify-traffic"
 ```
 
-同样把它加进 `dsh.profile.bundles`。装好后右上角出现悬浮窗，**设置**左栏出现「会话悬浮窗」。
+同样把它加进 `dsh.profile.bundles`。
 
 ### 方式三：插件面板
 
 DSH 侧边栏 →「插件」→ 添加插件，填 `dsh-notify-traffic`（或 `link:/绝对路径`）。
+
+## 安装踩坑
+
+### 装到的不是最新版
+
+`pnpm add dsh-notify-traffic` 有时会解析到旧版本，原因有两个：
+
+1. profile 里已有 `^1.0.0` 这类范围，pnpm 直接复用 lockfile
+2. DSH 的供应链冷却（`minimumReleaseAge`）会先挡住刚发布的版本
+
+要拿到指定版本，**显式写版本号**：
+
+```sh
+pnpm add dsh-notify-traffic@1.0.1
+```
+
+长期固定不被旧版粘住，把 profile `package.json` 的范围写成精确版：
+
+```json
+"dsh-notify-traffic": "1.0.1"
+```
+
+冷却期默认只拦"刚发布几小时"的包，等过去后再 `pnpm update dsh-notify-traffic` 也能拿到新版。
+
+### 插件面板卸不掉，报 `bundle-in-use`
+
+只要你在设置页保存过配置，profile 的 `cordis.patch.yml` 里就会留下这个插件的配置行：
+
+```yaml
+- id: notify-traffic
+  name: dsh-notify-traffic
+  config: { ... }
+```
+
+这行还在，插件管理器就认为它"仍在使用"，拒绝整体卸载。按需二选一：
+
+- 先删掉这段 YAML，再卸载
+- 或者直接用 `pnpm remove dsh-notify-traffic` 绕过管理器
+
+## 什么时候需要重启
+
+改配置、改 UI、换版本，需要的动作不一样：
+
+| 你改了什么 | 生效方式 |
+| --- | --- |
+| 设置页里的任意开关 | **立即生效**，写回 profile 并同步内存 |
+| `cordis.patch.yml` 的 `config` | **立即生效**，HMR 会重组成新配置 |
+| `bin/overlay.html`（窗口外观） | 窗口自动重新加载，**不用重启 DSH** |
+| `client.js`（DSH 内的浮层与设置页） | 刷新 DSH 页面即可，client-hmr 会推新的 bundle |
+| `index.js` / `lib/*.js`（宿主逻辑） | **需要重启 DSH** |
+
+最后一条是 DSH 的机制决定的，不是本插件偷懒：Cordis 的 HMR 只把 profile 里**符号链接**的包纳入热替换范围，npm 装的是实体目录，宿主模块改动会被标记成"重启后才换代码"。`link:` 方式安装时它在热替换范围内，改宿主逻辑可以热更新。
+
+### 窗口外观怎么做到不用重启
+
+宿主在 `/state` 里带一个 `uiRev`（`overlay.html` 的修改时间），窗口每轮轮询比对，发现变化就自己 `location.reload()`。所以改样式、改文案，保存后窗口会在一两秒内刷新成新样子。
 
 ## 使用
 
