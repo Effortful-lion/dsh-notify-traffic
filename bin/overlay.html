@@ -24,6 +24,17 @@
     padding: 6px;
     width: fit-content;
   }
+  .notice {
+    margin: 0 0 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #f5c451;
+    background: rgba(245, 196, 81, 0.12);
+    text-align: center;
+    white-space: nowrap;
+  }
+
   .panel {
     width: 320px;
     background: var(--bg);
@@ -332,6 +343,14 @@
     }
 
     var panel = el('div', 'panel');
+
+    // 磁盘版本比运行版本新 → 提示重启（Host 逻辑换不掉，如实告诉用户）
+    var st = state.settings || {};
+    if (st.version && st.diskVersion && st.version !== st.diskVersion) {
+      var notice = el('div', 'notice');
+      notice.textContent = '已更新到 ' + st.diskVersion + '，重启 DSH 生效';
+      panel.appendChild(notice);
+    }
 
     if (mode === 'bar') {
       var pill = el('div', 'pill');

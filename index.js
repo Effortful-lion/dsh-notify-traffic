@@ -24,6 +24,24 @@ import { aggregate } from './lib/state.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+/** 本模块被加载时读到的版本。磁盘上变了说明有更新，但内存里还是这版。 */
+const RUNNING_VERSION = (() => {
+  try {
+    return JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8')).version
+  } catch {
+    return null
+  }
+})()
+
+/** 磁盘上现在的版本 */
+function diskVersion() {
+  try {
+    return JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8')).version
+  } catch {
+    return null
+  }
+}
+
 /** Cordis 插件名 */
 export const name = 'notify-traffic'
 
@@ -206,6 +224,8 @@ export function apply(ctx, config = {}) {
       sounds,
       focus: dshFocused,
       uiRev: overlayRevision(),
+      version: RUNNING_VERSION,
+      diskVersion: diskVersion(),
       settings: {
         mode: cfg.mode,
         form,
