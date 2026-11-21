@@ -238,6 +238,7 @@
     draft = {};
     status = { tone: '', text: '' };
     cfg = null;
+    setBuilt = false;
     render();
     fetch(API + '/config', { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -252,26 +253,27 @@
   function closeSettings() {
     view = 'traffic';
     draft = {};
+    setBuilt = false;
     render();
   }
 
   function setCfg(key, value) {
     draft[key] = value;
     status = { tone: '', text: '' };
-    render();
+    syncSettings();
   }
 
   function setSound(key, value) {
     draft.sound = draft.sound || {};
     draft.sound[key] = value;
     status = { tone: '', text: '' };
-    render();
+    syncSettings();
   }
 
   function saveCfg() {
     if (!Object.keys(draft).length) return;
     status = { tone: '', text: '保存中…' };
-    render();
+    syncSettings();
     fetch(API + '/config', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -284,11 +286,11 @@
         status = d && d.persisted
           ? { tone: 'ok', text: '已保存' }
           : { tone: 'warn', text: '已生效，写入配置失败：' + String(d && d.error || '') };
-        render();
+        syncSettings();
       })
       .catch(function (e) {
         status = { tone: 'warn', text: String(e && e.message || e) };
-        render();
+        syncSettings();
       });
   }
 
@@ -505,10 +507,13 @@
   }
 
   // ── 设置视图 ──────────────────────────────────────────
-  function renderSettings() {
-    root.innerHTML = '';
-    var panel = el('div', 'panel');
+  // 只构建一次 DOM，之后仅同步控件状态。
+  // 早期版本每次改值都重建整棵树，backdrop-filter 会跟着重新采样，
+  // 于是背景在「透明 ↔ 模糊」之间闪一下。
+  var setBuilt = false;
+  var setRefs = { segs: [], switches: [], inputs: [], saveBtn: null, statusEl: null };
 
+  function settingsHead() {
     var head = el('div', 'head');
     var lights = el('div', 'lights');
     [['close', '×', '关闭悬浮窗'], ['collapse', '−', '收起为胶囊'], ['expand', '+', '展开']].forEach(function (spec) {
@@ -530,14 +535,15 @@
     back.onclick = closeSettings;
     tools.appendChild(back);
     head.appendChild(tools);
-    panel.appendChild(head);
+    return head;
+  }
 
-    if (!cfg) {
-      var loading = el('div', 'empty', '读取中…');
-      panel.appendChild(loading);
-      root.appendChild(panel);
-      return;
-    }
+  function buildSettings() {
+    root.innerHTML = '';
+    setRefs = { segs: [], switches: [], inputs: [], saveBtn: null, statusEl: null };
+
+    var panel = el('div', 'panel');
+    panel.appendChild(settingsHead());
 
     var body = el('div', 's-body');
     var val = function (k) { return draft[k] !== undefined ? draft[k] : cfg[k]; };
@@ -558,31 +564,33 @@
       r.appendChild(control);
       sec.appendChild(r);
     }
-    function segment(options, value, onPick) {
+    function segment(options, get, onPick) {
       var g = el('div', 'seg');
+      var values = options.map(function (o) { return o.value; });
       options.forEach(function (o) {
         var b = el('button', null, o.label);
-        b.setAttribute('aria-pressed', value === o.value ? 'true' : 'false');
         b.onclick = function () { onPick(o.value); };
         g.appendChild(b);
       });
+      setRefs.segs.push({ el: g, get: get, values: values });
       return g;
     }
-    function toggle(on, onClick) {
+    function toggle(get, onClick) {
       var b = el('button', 'sw');
-      b.setAttribute('aria-checked', on ? 'true' : 'false');
       b.onclick = onClick;
+      setRefs.switches.push({ el: b, get: get });
       return b;
     }
-    function numberInput(key) {
+    function numberInput(get) {
       var i = el('input', 'inp');
       i.type = 'number';
-      i.value = String(val(key) == null ? '' : val(key));
-      i.oninput = function () {
-        draft[key] = Number(i.value);
-      };
-      i.onchange = function () { setCfg(key, Number(i.value)); };
+      i.onchange = function () { get.set(Number(i.value)); };
+      setRefs.inputs.push({ el: i, get: get.get, set: get.set });
       return i;
+    }
+
+    function cfgAccessor(key) {
+      return function () { return val(key); };
     }
 
     var s1 = section('悬浮窗位置');
@@ -591,56 +599,108 @@
       { value: 'inframe', label: '页面内' },
       { value: 'both', label: '都开' },
       { value: 'off', label: '关闭' }
-    ], val('overlay'), function (v) { setCfg('overlay', v); }));
+    ], cfgAccessor('overlay'), function (v) { setCfg('overlay', v); }));
 
     var s2 = section('形态');
     rowInto(s2, '初始', segment([
       { value: 'card', label: '卡片' },
       { value: 'bar', label: '胶囊' },
       { value: 'compact', label: '单灯' }
-    ], val('form'), function (v) { setCfg('form', v); }));
+    ], cfgAccessor('form'), function (v) { setCfg('form', v); }));
 
     var s3 = section('声音');
-    rowInto(s3, '总开关', toggle(sval('enabled') === true, function () { setSound('enabled', sval('enabled') !== true); }));
-    rowInto(s3, '审批', toggle(sval('approval') === true, function () { setSound('approval', sval('approval') !== true); }));
-    rowInto(s3, '提问', toggle(sval('question') === true, function () { setSound('question', sval('question') !== true); }));
-    rowInto(s3, '出错', toggle(sval('error') === true, function () { setSound('error', sval('error') !== true); }));
-    rowInto(s3, '完成', toggle(sval('completion') === true, function () { setSound('completion', sval('completion') !== true); }));
-    rowInto(s3, '仅失焦播完成音', toggle(sval('onlyWhenUnfocused') === true, function () {
-      setSound('onlyWhenUnfocused', sval('onlyWhenUnfocused') !== true);
-    }));
+    function soundToggle(label, key) {
+      rowInto(s3, label, toggle(function () { return sval(key) === true; }, function () {
+        setSound(key, sval(key) !== true);
+      }));
+    }
+    soundToggle('总开关', 'enabled');
+    soundToggle('审批', 'approval');
+    soundToggle('提问', 'question');
+    soundToggle('出错', 'error');
+    soundToggle('完成', 'completion');
+    soundToggle('仅失焦播完成音', 'onlyWhenUnfocused');
 
     var qh = el('input', 'inp');
     qh.type = 'text';
     qh.placeholder = '22:00-08:00';
-    qh.value = String(sval('quietHours') || '');
     qh.onchange = function () { setSound('quietHours', qh.value); };
+    setRefs.inputs.push({ el: qh, get: function () { return sval('quietHours') || ''; } });
     rowInto(s3, '静默时段', qh);
 
     var vol = el('input');
     vol.type = 'range';
     vol.min = 0; vol.max = 1; vol.step = 0.05;
-    vol.value = String(sval('volume') == null ? 0.6 : sval('volume'));
     vol.style.width = '96px';
     vol.onchange = function () { setSound('volume', Number(vol.value)); };
+    setRefs.inputs.push({ el: vol, get: function () { return sval('volume') == null ? 0.6 : sval('volume'); } });
     rowInto(s3, '音量', vol);
 
     var s4 = section('节奏');
-    rowInto(s4, '绿灯保持(ms)', numberInput('greenHoldMs'));
-    rowInto(s4, '空闲移出(ms)', numberInput('idleKeepMs'));
-    rowInto(s4, '列表上限', numberInput('queueCap'));
+    function numRow(label, key) {
+      rowInto(s4, label, numberInput({
+        get: cfgAccessor(key),
+        set: function (v) { setCfg(key, v); },
+      }));
+    }
+    numRow('绿灯保持(ms)', 'greenHoldMs');
+    numRow('空闲移出(ms)', 'idleKeepMs');
+    numRow('列表上限', 'queueCap');
 
     panel.appendChild(body);
 
     var foot = el('div', 'foot');
     var saveBtn = el('button', 'btn btn-primary', '保存');
-    saveBtn.disabled = Object.keys(draft).length === 0;
     saveBtn.onclick = saveCfg;
     foot.appendChild(saveBtn);
-    foot.appendChild(el('span', 'status', status.text)).setAttribute('data-tone', status.tone);
+    var statusEl = el('span', 'status');
+    foot.appendChild(statusEl);
     panel.appendChild(foot);
 
+    setRefs.saveBtn = saveBtn;
+    setRefs.statusEl = statusEl;
+
     root.appendChild(panel);
+  }
+
+  function syncSettings() {
+    setRefs.segs.forEach(function (r) {
+      var cur = r.get();
+      var btns = r.el.querySelectorAll('button');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].setAttribute('aria-pressed', r.values[i] === cur ? 'true' : 'false');
+      }
+    });
+    setRefs.switches.forEach(function (r) {
+      r.el.setAttribute('aria-checked', r.get() ? 'true' : 'false');
+    });
+    setRefs.inputs.forEach(function (r) {
+      // 正在输入的框不要被覆盖
+      if (document.activeElement === r.el) return;
+      var v = r.get();
+      r.el.value = String(v == null ? '' : v);
+    });
+    if (setRefs.saveBtn) setRefs.saveBtn.disabled = !Object.keys(draft).length;
+    if (setRefs.statusEl) {
+      setRefs.statusEl.textContent = status.text;
+      setRefs.statusEl.setAttribute('data-tone', status.tone);
+    }
+  }
+
+  function renderSettings() {
+    if (!cfg) {
+      root.innerHTML = '';
+      var panel = el('div', 'panel');
+      panel.appendChild(settingsHead());
+      panel.appendChild(el('div', 'empty', '读取中…'));
+      root.appendChild(panel);
+      return;
+    }
+    if (!setBuilt) {
+      buildSettings();
+      setBuilt = true;
+    }
+    syncSettings();
   }
 
   // ── 打开会话 ──────────────────────────────────────────

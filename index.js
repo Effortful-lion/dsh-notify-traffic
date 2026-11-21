@@ -131,6 +131,8 @@ export function apply(ctx, config = {}) {
 
   // ── 卡片与请求的生命周期 ────────────────────────────────
   function openRequest({ requestId, sessionId, kind, name, payload }) {
+    // 同上：请求可能先于任何状态事件到达
+    store.get(sessionId, name)
     cards.set(requestId, {
       requestId,
       sessionId,
@@ -496,6 +498,7 @@ export function apply(ctx, config = {}) {
           return
         }
         const answers = Array.isArray(body?.answers) ? body.answers : []
+        hits.reply += 1
         sendJson(res, 200, settle(requestId, { answers }))
         return
       }
@@ -503,6 +506,7 @@ export function apply(ctx, config = {}) {
       if (pathname === '/ack' && method === 'POST') {
         const body = await readJson(req)
         const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
+        hits.ack += 1
         ackError(sessionId)
         sendJson(res, 200, { ok: true })
         return
@@ -586,6 +590,7 @@ export function apply(ctx, config = {}) {
       }
 
       if (pathname === '/config' && method === 'GET') {
+        hits.config += 1
         sendJson(res, 200, { ok: true, config: publicConfig() })
         return
       }
@@ -654,6 +659,8 @@ export function apply(ctx, config = {}) {
     if (sid === '') return
     if (!isTerminalError(ev)) return
     const nm = sessionName(ev.agent)
+    // 记录可能还不存在（会话没经过 running 就直接失败）：先建再标记
+    store.get(sid, nm)
     store.apply({ sessionId: sid, name: nm, kind: 'error' })
     sound.push(
       { kind: 'error', sessionId: sid, name: nm, ts: Date.now() },

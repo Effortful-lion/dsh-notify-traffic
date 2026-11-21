@@ -12,7 +12,7 @@ import WebKit
 
 enum Cfg {
     static var url: URL = URL(string: "about:blank")!
-    static var width: Double = 320
+    static var width: Double = 332
     static var height: Double = 300
 }
 
@@ -28,7 +28,7 @@ if let urlString = argValue("--url"), let parsed = URL(string: urlString) {
     FileHandle.standardError.write(Data("ntf-overlay: --url required\n".utf8))
     exit(2)
 }
-Cfg.width = Double(argValue("--width") ?? "320") ?? 320
+Cfg.width = Double(argValue("--width") ?? "332") ?? 332
 Cfg.height = Double(argValue("--height") ?? "300") ?? 300
 
 final class PanelWindow: NSWindow {
@@ -184,6 +184,12 @@ extension AppDelegate: WKScriptMessageHandler {
         f.size = NSSize(width: newW, height: newH)
         f.origin.y = top - newH
         f.origin.x = right - newW      // 右上角固定，向左向下伸缩
+        // 贴边时右对齐会把窗口推出屏幕，夹回可见区
+        if let screen = NSScreen.main ?? NSScreen.screens.first {
+            let v = screen.visibleFrame
+            f.origin.x = min(max(f.origin.x, v.minX), max(v.minX, v.maxX - newW))
+            f.origin.y = min(max(f.origin.y, v.minY), max(v.minY, v.maxY - newH))
+        }
         window.setFrame(f, display: true, animate: false)
     }
 }
