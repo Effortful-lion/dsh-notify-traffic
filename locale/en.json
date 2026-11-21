@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DSH Session Status Overlay",
+    "description": "Always-on-top native window: four-color status lights, approval/question cards, sound alerts. Stays above every app after DSH is minimized; handle blockers in place.",
+    "detail": "docs/DETAIL.md"
+  }
+}

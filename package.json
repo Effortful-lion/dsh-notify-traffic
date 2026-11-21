@@ -1,0 +1,74 @@
+{
+  "name": "dsh-notify-traffic",
+  "version": "1.0.0",
+  "private": false,
+  "description": "DSH 会话状态悬浮窗：系统级置顶四色状态灯、审批/提问窗内直办、声音提醒",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "lib",
+    "bin/overlay.swift",
+    "bin/overlay.html",
+    "locale",
+    "docs",
+    "icon.svg",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  },
+  "license": "MIT",
+  "author": "Effortful-lion",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis-plugin",
+    "session",
+    "monitor",
+    "overlay",
+    "notifications",
+    "macos"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "darwin"
+  ],
+  "main": "./index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Effortful-lion/dsh-notify-traffic.git"
+  },
+  "homepage": "https://github.com/Effortful-lion/dsh-notify-traffic#readme",
+  "bugs": {
+    "url": "https://github.com/Effortful-lion/dsh-notify-traffic/issues"
+  },
+  "scripts": {
+    "build:overlay": "swiftc -O -o bin/ntf-overlay bin/overlay.swift",
+    "check": "node --check index.js && node --check client.js"
+  }
+}

@@ -1,0 +1,63 @@
+name: publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No registry-url here: setup-node would write an .npmrc holding
+      # _authToken=${NODE_AUTH_TOKEN}, and that placeholder token makes npm skip
+      # OIDC trusted publishing entirely (fails with ENEEDAUTH/E404).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: npm 11.5.1+ (trusted publishing)
+        run: npm install -g npm@latest
+
+      - name: Tag 必须等于 package.json 的 version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "tag $tag != package.json $version" >&2
+            exit 1
+          fi
+
+      - name: 两个入口的语法自检
+        run: |
+          node --check index.js
+          node --check client.js
+
+      - name: 打包内容自检（.swift 必须在，编译产物不应在）
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack.log
+          grep -q 'bin/overlay.swift' /tmp/pack.log || { echo "缺少 bin/overlay.swift" >&2; exit 1; }
+          if grep -q 'bin/ntf-overlay' /tmp/pack.log; then
+            echo "编译产物 bin/ntf-overlay 不应进入发布包" >&2
+            exit 1
+          fi
+
+      # The trusted publisher grants "npm stage publish" today: a direct publish
+      # is rejected with "OIDC permission denied for this action". Stage it then,
+      # and leave the stage id in the run summary so approving is one click.
+      - name: Publish with provenance
+        run: |
+          if npm publish --provenance --access public; then
+            echo "### 已直接发布带 provenance 的版本" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "### 直接发布被 OIDC 权限拒绝，改为 staging" >> "$GITHUB_STEP_SUMMARY"
+          npm stage publish --access public 2>&1 | tee /tmp/stage.log
+          grep -iE 'stage|approve' /tmp/stage.log | head -5 >> "$GITHUB_STEP_SUMMARY" || true

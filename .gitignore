@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+*.log
+
+# 编译产物：首次启用插件时由 bin/overlay.swift 自动重建
+bin/ntf-overlay

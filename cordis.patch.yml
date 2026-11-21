@@ -1,0 +1,4 @@
+- insert:
+    - id: notify-traffic
+      name: dsh-notify-traffic
+      config: {}
