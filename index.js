@@ -234,18 +234,31 @@ export function apply(ctx, config = {}) {
   const OVERLAY_BIN = join(__dirname, 'bin', 'ntf-overlay')
   const OVERLAY_SRC = join(__dirname, 'bin', 'overlay.swift')
 
-  /** 二进制路径；缺失时尝试用 swiftc 现场编译一次 */
+  /** 二进制是否需要重编：缺失，或源码比产物新（升级后旧二进制不该继续跑） */
+  function overlayStale() {
+    if (!existsSync(OVERLAY_BIN)) return true
+    try {
+      const src = statSync(OVERLAY_SRC)
+      const bin = statSync(OVERLAY_BIN)
+      return src.mtimeMs > bin.mtimeMs
+    } catch {
+      return true
+    }
+  }
+
+  /** 二进制路径；缺失或源码更新时用 swiftc 现场编译一次 */
   function overlayBinary() {
-    if (existsSync(OVERLAY_BIN)) return OVERLAY_BIN
     if (process.platform !== 'darwin') return null
-    if (!existsSync(OVERLAY_SRC)) return null
+    if (!existsSync(OVERLAY_SRC)) return existsSync(OVERLAY_BIN) ? OVERLAY_BIN : null
+    if (!overlayStale()) return OVERLAY_BIN
     try {
       const result = spawnSyncCompile()
       if (result) return OVERLAY_BIN
     } catch (error) {
       logger.warn?.(`notify-traffic: overlay build failed: ${error?.message ?? error}`)
     }
-    return null
+    // 编译失败但旧二进制还在：继续用旧的，别把窗口搞没
+    return existsSync(OVERLAY_BIN) ? OVERLAY_BIN : null
   }
 
   function spawnSyncCompile() {
