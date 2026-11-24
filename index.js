@@ -680,7 +680,10 @@ export function apply(ctx, config = {}) {
   }
 
   ctx.effect(() => {
-    const dispose = ctx.webServer.register({ kind: 'prefix', path: PREFIX, handler })
+    // webServer 的 auth 默认是 'required'，要求存活 Peer（宿主 Cookie）。系统悬浮窗是
+    // 独立的 WKWebView 进程，拿不到宿主凭据，就只会拿到 401 unauthorized。这里显式匿名：
+    // 回环 + 宿主的 Host/Origin fence 仍然生效，跨站来源会被 403。
+    const dispose = ctx.webServer.register({ kind: 'prefix', path: PREFIX, auth: 'anonymous', handler })
     return () => {
       if (typeof dispose === 'function') dispose()
     }
