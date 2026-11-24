@@ -781,8 +781,11 @@ export function apply(ctx, config = {}) {
       const questions = (request.questions ?? []).map((q) => ({
         id: q.id,
         question: q.question ?? q.header ?? '',
+        header: q.header ?? '',
         detail: q.detail ?? '',
         multiSelect: q.multiSelect === true,
+        // 展示意图只影响呈现（approval / plan-review），答案编码不变
+        intent: q.intent?.kind ?? '',
         options: (q.options ?? []).map((o) => ({
           label: o.label ?? '',
           description: o.description ?? '',

@@ -93,6 +93,11 @@
   .req-kind { font-weight: 600; }
   .req-name { color: var(--fg-dim); }
   .req-body { font-size: 11px; color: var(--fg-dim); word-break: break-word; max-height: 58px; overflow-y: auto; }
+  .q-head { font-size: 10px; font-weight: 600; color: var(--fg-dim); letter-spacing: .02em; }
+  .q-detail {
+    font-size: 10px; color: var(--fg-dim); white-space: pre-wrap; word-break: break-word;
+    max-height: 96px; overflow-y: auto; padding-left: 6px; border-left: 2px solid var(--line);
+  }
   .actions { display: flex; gap: 6px; justify-content: flex-end; }
   .btn {
     appearance: none; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.08);
@@ -315,9 +320,16 @@
       }),
       a: d.aggregate,
       c: (d.cards || []).map(function (x) {
-        return [x.requestId, x.kind, x.name, x.toolName, x.reason, (x.questions || []).length];
+        return [x.requestId, x.kind, x.name, x.toolName, x.reason, (x.questions || []).map(function (q) {
+          return [
+            q.id, q.header, q.question, q.detail, q.intent, q.multiSelect === true,
+            (q.options || []).map(function (o) { return [o.label, o.description]; })
+          ];
+        })];
       }),
-      f: d.settings && d.settings.form
+      f: d.settings && d.settings.form,
+      // 升级提示也要进指纹，否则磁盘版本变化不会触发重绘
+      v: [d.version, d.diskVersion]
     });
   }
 
@@ -493,7 +505,9 @@
       qBox.style.display = 'flex';
       qBox.style.flexDirection = 'column';
       qBox.style.gap = '4px';
+      if (q.header) qBox.appendChild(el('div', 'q-head', q.header));
       qBox.appendChild(el('div', 'req-body', q.question || ''));
+      if (q.detail) qBox.appendChild(el('div', 'q-detail', q.detail));
       (q.options || []).forEach(function (o) {
         var on = (sel[q.id] || []).indexOf(o.label) >= 0;
         var b = el('button', 'opt');
@@ -757,6 +771,12 @@
           }
         }
         state = d;
+        // 卡片已消失（超时或被别处回答）时清掉本地勾选，避免残留
+        var aliveCards = {};
+        (d.cards || []).forEach(function (c) { aliveCards[c.requestId] = 1; });
+        Object.keys(selected).forEach(function (rid) {
+          if (!aliveCards[rid]) delete selected[rid];
+        });
         speak(d.sounds);
         // 宿主转来的「打开会话」请求（来自本窗口的点击）
         var f = d.settings && d.settings.focusRequest;
@@ -816,9 +836,6 @@
     if (justDragged) { justDragged = false; return; }
     setForm('card');
   }
-  document.addEventListener('mouseup', function () {
-    send('ntfAction', 'dragEnd');
-  }, true);
 
   // 事件委托：即使行节点被替换，点击仍能被捕获
   document.addEventListener('click', function (e) {

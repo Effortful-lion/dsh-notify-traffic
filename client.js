@@ -218,6 +218,12 @@ window.__ModuleLoader__.load({
   font-size:11px;color:var(--dsw-alias-text-secondary, #5b5b60);
   word-break:break-word;max-height:66px;overflow-y:auto;
 }
+.dnt-q-head{font-size:10px;font-weight:600;color:var(--dsw-alias-text-tertiary, #8b8d98)}
+.dnt-q-detail{
+  font-size:10px;color:var(--dsw-alias-text-tertiary, #8b8d98);
+  white-space:pre-wrap;word-break:break-word;max-height:120px;overflow-y:auto;
+  border-left:2px solid var(--dsw-alias-border-subtle, rgba(0,0,0,.08));padding-left:6px;
+}
 .dnt-actions{display:flex;gap:6px;justify-content:flex-end}
 .dnt-opt{
   text-align:left;border:1px solid var(--dsw-alias-border-subtle, rgba(0,0,0,.12));
@@ -432,7 +438,9 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { key: q.id, style: { display: 'flex', flexDirection: 'column', gap: '4px' } },
+                q.header ? h('div', { className: 'dnt-q-head' }, q.header) : null,
                 h('div', { className: 'dnt-req-body' }, q.question),
+                q.detail ? h('div', { className: 'dnt-q-detail' }, q.detail) : null,
                 (q.options ?? []).map((o) => {
                   const on = (selected[q.id] ?? []).includes(o.label)
                   return h(
