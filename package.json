@@ -59,6 +59,10 @@
     "darwin"
   ],
   "main": "./index.js",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Effortful-lion/dsh-notify-traffic.git"
